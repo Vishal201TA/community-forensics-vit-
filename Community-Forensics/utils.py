@@ -97,7 +97,6 @@ def parse_args():
     parser.add_argument('--dataset_path', type=str, default='/path/to/CIFake/train')
     parser.add_argument('--val_path', type=str, default='/path/to/CIFake/test')
     parser.add_argument('--image_size', type=int, default=224)
-    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_workers', type=int, default=4)
 
     args = parser.parse_args()
