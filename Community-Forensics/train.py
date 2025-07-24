@@ -19,20 +19,19 @@ def train(
         args=None,
         logger=None,
 ):
-    # Initialize distributed training
+    # Setup distributed environment
     rank, local_rank, world_size = ut.dist_setup()
 
-    # Set random seeds
+    # Set random seed for reproducibility
     torch.manual_seed(args.seed + rank)
     np.random.seed(args.seed + rank)
     random.seed(args.seed + rank)
 
-    # Set device and args
     args.rank = rank
     args.local_rank = local_rank
     args.world_size = world_size
 
-    # Initialize W&B
+    # Initialize W&B if required
     if rank == 0 and args.wandb_token != "":
         ut.init_wandb(args)
 
@@ -43,16 +42,15 @@ def train(
 
     # Load model
     try:
-        model = models.ViTClassifier(args=args, device=local_rank, dtype=torch.float32).to(args.local_rank)
+        model = models.ViTClassifier(args=args, device=local_rank, dtype=torch.float32).to(local_rank)
     except Exception as e:
-        logger.error(f"Error loading model. rank={rank}: {e}")
+        logger.error(f"[RANK {rank}] Error loading model: {e}")
         sys.exit(1)
 
-    # Set optimizer
+    # Set optimizer, scaler, scheduler
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp) if args.use_amp else None
 
-    # Set scheduler
     warmup_steps = round(args.warmup_frac * ut.get_total_itrs(args, trainLoaderLen)) if args.warmup_frac > 0 \
         else round(args.warmup_epochs * trainLoaderLen)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -61,42 +59,41 @@ def train(
         eta_min=ut.get_min_lr(args)
     )
 
-    # Set loss
+    # Loss function
     criterion = nn.BCEWithLogitsLoss()
 
-    # Load checkpoint
+    # Load checkpoint or weights
     if args.ckpt_path != '':
         if args.only_load_model_weights:
             model = ut.load_only_weights(model, args.ckpt_path, rank)
+            logger.info(f"[RANK {rank}] Fine-tuning from pretrained weights: {args.ckpt_path}")
             epoch_start = 0
             total_itr = 0
         else:
             model, optimizer, scheduler, epoch_start, total_itr = ut.load_checkpoint(
                 model, optimizer, scheduler, scaler, args.ckpt_path, rank)
+            logger.info(f"[RANK {rank}] Resuming full training from checkpoint: {args.ckpt_path}")
             epoch_start += 1
     else:
+        logger.info(f"[RANK {rank}] Training from scratch.")
         epoch_start = 0
         total_itr = 0
 
-    # Try compiling the model
+    # Optional: Compile model
     try:
         model = torch.compile(model, dynamic=True)
     except Exception as e:
-        logger.error(f"Error compiling model. rank={rank}: {e}")
+        logger.warning(f"[RANK {rank}] Model compile skipped: {e}")
 
-    # Move to device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
+    logger.info(f"[RANK {rank}] Model ready. Beginning training...")
 
-    torch.cuda.empty_cache()
-    logger.info(f"Model loaded and DDP set. rank={rank}")
-
-    # Train loop
+    # Training loop
     local_window_loss = ut.LocalWindow(100)
-    last_epoch = epoch_start - 1  # default in case no training occurs
+    last_epoch = epoch_start - 1
     for epoch in range(epoch_start, args.epochs):
         last_epoch = epoch
         gc.collect()
+
         avgTrainLoss, total_itr = ut.train_one_epoch(
             args=args,
             epoch=epoch,
@@ -140,14 +137,13 @@ def train(
 
         scheduler.step()
 
-        if rank <= 0 and args.wandb_token != "":
+        if rank == 0 and args.wandb_token != "":
             wandb.log(wandb_log_dict, commit=False)
-            wandb.finish()
 
         gc.collect()
 
     # Save final model and checkpoint
-    if rank <= 0:
+    if rank == 0:
         torch.save(model.state_dict(), args.save_path)
         ut.save_checkpoint(model, optimizer, scheduler, scaler, last_epoch, total_itr,
                            args.save_path.replace('.pt', '_ckpt.pt'))
@@ -159,6 +155,13 @@ def main():
     args = ut.parse_args()
     args.random_port_offset = np.random.randint(-1000,1000) # randomize to avoid port conflict in same device
 
+    args.resume = "/kaggle/input/deepfake/pytorch/default/1/model_v11_ViT_384_base_ckpt.pt"
+    args.save_path = "cifake-finetuned.pt"
+    args.epochs = 5
+    args.verbose = 2
+    args.gpus_list = "0"
+    args.cpus_per_gpu = 2
+
     if args.gpus_list != '':
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus_list
         logger.info(f"Setting CUDA_VISIBLE_DEVICES to {args.gpus_list}.")
@@ -167,6 +170,7 @@ def main():
     assert args.gpus <= torch.cuda.device_count(), f'Not enough GPUs! {torch.cuda.device_count()} available, {args.gpus} required.'
     assert args.gpus > 0, f'Number of GPUs must be greater than 0!'
     assert args.cpus_per_gpu > 0, f'Number of CPUs per GPU must be greater than 0!'
+    
 
     if args.ckpt_save_path == '':
         args.ckpt_save_path = args.save_path
