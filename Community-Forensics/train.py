@@ -88,7 +88,7 @@ def train(
     model = model.to(device)
 
     torch.cuda.empty_cache()
-    dist.barrier()
+    # dist.barrier()
     logger.info(f"Model loaded and DDP set. rank={rank}")
 
     # Train
