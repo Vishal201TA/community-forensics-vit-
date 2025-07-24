@@ -19,20 +19,21 @@ def train(
         args=None,
         logger=None,
 ):
-    # initialize distributed training
+    # Initialize distributed training
     rank, local_rank, world_size = ut.dist_setup()
 
-    # Set random seed
-    torch.manual_seed(args.seed+rank)
-    np.random.seed(args.seed+rank)
-    random.seed(args.seed+rank)
+    # Set random seeds
+    torch.manual_seed(args.seed + rank)
+    np.random.seed(args.seed + rank)
+    random.seed(args.seed + rank)
 
-    # Set device
+    # Set device and args
     args.rank = rank
     args.local_rank = local_rank
     args.world_size = world_size
 
-    if rank==0 and args.wandb_token != "":
+    # Initialize W&B
+    if rank == 0 and args.wandb_token != "":
         ut.init_wandb(args)
 
     # Load data
@@ -50,51 +51,52 @@ def train(
     # Set optimizer
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp) if args.use_amp else None
-    #scaler = torch.GradScaler(device=local_rank, enabled=args.use_amp)
 
     # Set scheduler
-    if args.warmup_frac > 0:
-        warmup_steps=round(args.warmup_frac*ut.get_total_itrs(args, trainLoaderLen))
-    else:
-        warmup_steps = round(args.warmup_epochs * trainLoaderLen)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs*trainLoaderLen-warmup_steps, eta_min=ut.get_min_lr(args)) # set min_lr = lr if args.no_lr_schedule.
+    warmup_steps = round(args.warmup_frac * ut.get_total_itrs(args, trainLoaderLen)) if args.warmup_frac > 0 \
+        else round(args.warmup_epochs * trainLoaderLen)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=args.epochs * trainLoaderLen - warmup_steps,
+        eta_min=ut.get_min_lr(args)
+    )
 
-    # Set loss function
+    # Set loss
     criterion = nn.BCEWithLogitsLoss()
 
-    # Load checkpoint if set
+    # Load checkpoint
     if args.ckpt_path != '':
         if args.only_load_model_weights:
             model = ut.load_only_weights(model, args.ckpt_path, rank)
             epoch_start = 0
             total_itr = 0
         else:
-            model, optimizer, scheduler, epoch_start, total_itr = ut.load_checkpoint(model, optimizer, scheduler, scaler, args.ckpt_path, rank)
-            epoch_start = epoch_start+1 # Since it saves current epoch for ckpt, not next.
+            model, optimizer, scheduler, epoch_start, total_itr = ut.load_checkpoint(
+                model, optimizer, scheduler, scaler, args.ckpt_path, rank)
+            epoch_start += 1
     else:
         epoch_start = 0
         total_itr = 0
 
-    # try compiling the model
+    # Try compiling the model
     try:
         model = torch.compile(model, dynamic=True)
     except Exception as e:
         logger.error(f"Error compiling model. rank={rank}: {e}")
-        #sys.exit(1)
 
-    # Set DistributedDataParallel
-    # model = DDP(model, device_ids=[local_rank]) #DDP
+    # Move to device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
     torch.cuda.empty_cache()
-    # dist.barrier()
     logger.info(f"Model loaded and DDP set. rank={rank}")
 
-    # Train
-    local_window_loss=ut.LocalWindow(100)
+    # Train loop
+    local_window_loss = ut.LocalWindow(100)
+    last_epoch = epoch_start - 1  # default in case no training occurs
     for epoch in range(epoch_start, args.epochs):
-        gc.collect() # run garbage collection
+        last_epoch = epoch
+        gc.collect()
         avgTrainLoss, total_itr = ut.train_one_epoch(
             args=args,
             epoch=epoch,
@@ -109,6 +111,7 @@ def train(
             rank=rank,
             itr=total_itr,
         )
+
         if valLoader is not None:
             valLoss, valAcc, valAP = ut.evaluate_one_epoch(
                 args=args,
@@ -121,23 +124,34 @@ def train(
                 separate_eval=False,
                 add_sigmoid=(not args.dont_add_sigmoid),
             )
-            wandb_log_dict = {"epoch": epoch+1, "Loss/Train": avgTrainLoss, "Loss/Val": valLoss, "Acc/Val": valAcc, "AP/Val": valAP}
+            wandb_log_dict = {
+                "epoch": epoch + 1,
+                "Loss/Train": avgTrainLoss,
+                "Loss/Val": valLoss,
+                "Acc/Val": valAcc,
+                "AP/Val": valAP
+            }
         else:
             valLoss, valAcc, valAP = -1, -1, -1
-            wandb_log_dict = {"epoch": epoch+1, "Loss/Train": avgTrainLoss}
-        scheduler.step()
-        if rank<=0 and args.wandb_token != "":
-            # log wandb
-            wandb.log(
-                wandb_log_dict, commit=False
-            )
-            wandb.finish()
-        gc.collect() # run garbage collection
+            wandb_log_dict = {
+                "epoch": epoch + 1,
+                "Loss/Train": avgTrainLoss
+            }
 
-    # log wandb and save model
+        scheduler.step()
+
+        if rank <= 0 and args.wandb_token != "":
+            wandb.log(wandb_log_dict, commit=False)
+            wandb.finish()
+
+        gc.collect()
+
+    # Save final model and checkpoint
     if rank <= 0:
         torch.save(model.state_dict(), args.save_path)
-        ut.save_checkpoint(model, optimizer, scheduler, scaler, epoch, total_itr, args.save_path.replace('.pt', '_ckpt.pt'))
+        ut.save_checkpoint(model, optimizer, scheduler, scaler, last_epoch, total_itr,
+                           args.save_path.replace('.pt', '_ckpt.pt'))
+
         if args.ckpt_keep_count > 0:
             ut.keep_only_topn_checkpoints(args.save_path, args.ckpt_keep_count)
 
