@@ -679,7 +679,8 @@ def load_checkpoint(model, optimizer, scheduler, scaler, ckpt_path, rank):
     """
     Loads checkpoint from ckpt_path
     """
-    dist.barrier()
+    if dist.is_available() and dist.is_initialized():
+        dist.barrier()
     map_location = {'cuda:0': f'cuda:{rank}'}
     #map_location = f'cuda:{rank}'
     checkpoint = torch.load(ckpt_path, map_location=map_location)
@@ -704,7 +705,8 @@ def load_only_weights(model, ckpt_path, rank):
     """
     Only loads the weights of the model from `ckpt_path`. Useful for warm-starting the model.
     """
-    dist.barrier()
+    if dist.is_available() and dist.is_initialized():
+        dist.barrier()
     map_location = {'cuda:0': f'cuda:{rank}'}
     checkpoint = torch.load(ckpt_path, map_location=map_location)
     state_dict = checkpoint['model']
