@@ -83,7 +83,10 @@ def train(
         #sys.exit(1)
 
     # Set DistributedDataParallel
-    model = DDP(model, device_ids=[local_rank]) #DDP
+    # model = DDP(model, device_ids=[local_rank]) #DDP
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+
     torch.cuda.empty_cache()
     dist.barrier()
     logger.info(f"Model loaded and DDP set. rank={rank}")
