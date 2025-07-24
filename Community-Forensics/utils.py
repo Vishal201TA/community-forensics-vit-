@@ -646,7 +646,8 @@ def save_checkpoint(model, optimizer, scheduler, scaler, epoch, itr, ckpt_path):
     """
     Saves checkpoint to ckpt_path
     """
-    if hasattr(model.module, "_orig_mod"):
+    mod = model.module if hasattr(model, 'module') else model
+    if hasattr(mod, "_orig_mod"):
         model_state_dict = model.module._orig_mod.state_dict()
     else:
         model_state_dict = model.module.state_dict()
