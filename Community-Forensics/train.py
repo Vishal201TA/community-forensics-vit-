@@ -148,8 +148,9 @@ def train(
         ut.save_checkpoint(model, optimizer, scheduler, scaler, last_epoch, total_itr,
                            args.save_path.replace('.pt', '_ckpt.pt'))
 
-        if args.ckpt_keep_count > 0:
+        if args.ckpt_keep_count > 0 and args.save_path.strip() != "":
             ut.keep_only_topn_checkpoints(args.save_path, args.ckpt_keep_count)
+
 
 def main():
     args = ut.parse_args()
