@@ -216,26 +216,28 @@ def copy_lr(optim_src, optim_dst):
 #     torch.cuda.ipc_collect()
 #     return rank, local_rank, world_size
 
+import os
+import torch
+import torch.distributed as dist
+
 def dist_setup():
-    if "RANK" not in os.environ or "WORLD_SIZE" not in os.environ:
-        # Not running in distributed mode
-        rank = 0
-        local_rank = 0
-        world_size = 1
-        return rank, local_rank, world_size
+    if torch.cuda.device_count() > 1 and "RANK" in os.environ and "WORLD_SIZE" in os.environ:
+        rank = int(os.environ["RANK"])
+        local_rank = int(os.environ["LOCAL_RANK"])
+        world_size = int(os.environ["WORLD_SIZE"])
 
-    rank = int(os.environ["RANK"])
-    local_rank = int(os.environ["LOCAL_RANK"])
-    world_size = int(os.environ["WORLD_SIZE"])
-
-    torch.distributed.init_process_group(
-        backend="nccl",
-        init_method="env://",
-        rank=rank,
-        world_size=world_size
-    )
-    torch.cuda.set_device(local_rank)
+        dist.init_process_group(
+            backend="nccl",
+            init_method="env://",
+            rank=rank,
+            world_size=world_size
+        )
+        torch.cuda.set_device(local_rank)
+    else:
+        # Single-GPU / non-distributed mode
+        rank, local_rank, world_size = 0, 0, 1
     return rank, local_rank, world_size
+
 
 def dist_cleanup():
     dist.destroy_process_group()
@@ -647,10 +649,15 @@ def save_checkpoint(model, optimizer, scheduler, scaler, epoch, itr, ckpt_path):
     Saves checkpoint to ckpt_path
     """
     mod = model.module if hasattr(model, 'module') else model
-    if hasattr(mod, "_orig_mod"):
-        model_state_dict = model.module._orig_mod.state_dict()
+    if hasattr(model, "module"): 
+        mod = model.module
     else:
-        model_state_dict = model.module.state_dict()
+        mod = model
+
+    if hasattr(mod, "_orig_mod"):  # If compiled model
+        model_state_dict = mod._orig_mod.state_dict()
+    else:
+        model_state_dict = mod.state_dict()
 
     checkpoint = {
         'model': model_state_dict,
