@@ -198,22 +198,43 @@ def copy_lr(optim_src, optim_dst):
     for dst_g in optim_dst.param_groups:
         dst_g['lr'] = src_lr
 
-def dist_setup():
-    """
-    Setup for distributed data parallel using torchrun
+# def dist_setup():
+#     """
+#     Setup for distributed data parallel using torchrun
 
-    Example torchrun script:
-    torchrun --nnodes=1 --nproc_per_node=4 --rdzv_id=456 --rdzv_backend=c10d --rdzv_endpoint=localhost:29531 train.py {arguments}
-    """
+#     Example torchrun script:
+#     torchrun --nnodes=1 --nproc_per_node=4 --rdzv_id=456 --rdzv_backend=c10d --rdzv_endpoint=localhost:29531 train.py {arguments}
+#     """
+#     rank = int(os.environ["RANK"])
+#     local_rank = int(os.environ["LOCAL_RANK"])
+#     world_size = int(os.environ["WORLD_SIZE"])
+#     dist.init_process_group("nccl", init_method="env://")
+
+#     torch.cuda.set_device(local_rank)
+#     logger.info(f"Rank {rank} / Local rank {local_rank} / World size {world_size} intialized.")
+#     torch.cuda.empty_cache()
+#     torch.cuda.ipc_collect()
+#     return rank, local_rank, world_size
+
+def dist_setup():
+    if "RANK" not in os.environ or "WORLD_SIZE" not in os.environ:
+        # Not running in distributed mode
+        rank = 0
+        local_rank = 0
+        world_size = 1
+        return rank, local_rank, world_size
+
     rank = int(os.environ["RANK"])
     local_rank = int(os.environ["LOCAL_RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
-    dist.init_process_group("nccl", init_method="env://")
 
+    torch.distributed.init_process_group(
+        backend="nccl",
+        init_method="env://",
+        rank=rank,
+        world_size=world_size
+    )
     torch.cuda.set_device(local_rank)
-    logger.info(f"Rank {rank} / Local rank {local_rank} / World size {world_size} intialized.")
-    torch.cuda.empty_cache()
-    torch.cuda.ipc_collect()
     return rank, local_rank, world_size
 
 def dist_cleanup():
