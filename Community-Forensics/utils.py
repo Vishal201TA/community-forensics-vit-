@@ -663,7 +663,7 @@ def save_checkpoint(model, optimizer, scheduler, scaler, epoch, itr, ckpt_path):
         'model': model_state_dict,
         'optimizer': optimizer.state_dict(),
         'scheduler': scheduler.state_dict(),
-        'scaler': scaler.state_dict(),
+        'scaler': scaler.state_dict() if scaler is not None else None,
         'epoch': epoch,
         'itr': itr,
     }
@@ -700,7 +700,9 @@ def load_checkpoint(model, optimizer, scheduler, scaler, ckpt_path, rank):
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
     if 'scalar' in checkpoint.keys():
-        scaler.load_state_dict(checkpoint['scaler'])
+        if 'scaler' in checkpoint and checkpoint['scaler'] is not None and scaler is not None:
+            scaler.load_state_dict(checkpoint['scaler'])
+
     epoch = checkpoint['epoch']
     itr = checkpoint['itr']
 
