@@ -17,8 +17,10 @@ logger: logging.Logger = ut.logger
 
 def keep_only_topn_checkpoints(ckpt_path, keep_top_n):
     ckpt_dir = os.path.dirname(ckpt_path)
-    if not os.path.exists(ckpt_dir) or ckpt_dir == '':
-        return
+
+    if not ckpt_dir or not os.path.exists(ckpt_dir):
+        logger.warning(f"[WARNING] Checkpoint directory does not exist: {ckpt_dir}")
+        return  # Exit safely
 
     ckpt_files = [f for f in os.listdir(ckpt_dir) if f.startswith("checkpoint_") and f.endswith(".pt")]
     ckpt_files = sorted(ckpt_files, key=lambda x: os.path.getmtime(os.path.join(ckpt_dir, x)))
@@ -26,6 +28,8 @@ def keep_only_topn_checkpoints(ckpt_path, keep_top_n):
     while len(ckpt_files) > keep_top_n:
         file_to_delete = ckpt_files.pop(0)
         os.remove(os.path.join(ckpt_dir, file_to_delete))
+        logger.info(f"[INFO] Removed old checkpoint: {file_to_delete}")
+
 
 def train(
         args=None,
@@ -184,16 +188,19 @@ def main():
     assert args.gpus > 0, f'Number of GPUs must be greater than 0!'
     assert args.cpus_per_gpu > 0, f'Number of CPUs per GPU must be greater than 0!'
     
-
-    if args.save_path == '':
-        args.save_path = os.path.join('./checkpoints', 'vit_final.pt')
+    # Ensure args.save_path is valid
+    if not args.save_path or args.save_path.strip() == '':
+        args.save_path = './checkpoints/cifake-finetuned.pt'
         os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
+        logger.info(f"[INFO] Defaulted save_path to: {args.save_path}")
 
-    if args.ckpt_save_path == '':
+    # Same for checkpoint save path
+    if not args.ckpt_save_path or args.ckpt_save_path.strip() == '':
         args.ckpt_save_path = args.save_path
 
+    
 
-    logger.info(f"Spawning processes on {args.gpus} GPUs.")
+    logger.info(f"Spawning processes on {args.gpus} GPUs. KK")
     logger.info(f"Verbosity: {args.verbose} (0: None, 1: Every epoch, 2: Every iteration)")
 
     logger.info(f"Model save name: {os.path.basename(args.save_path)}")
