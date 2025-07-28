@@ -185,8 +185,13 @@ def main():
     assert args.cpus_per_gpu > 0, f'Number of CPUs per GPU must be greater than 0!'
     
 
+    if args.save_path == '':
+        args.save_path = os.path.join('./checkpoints', 'vit_final.pt')
+        os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
+
     if args.ckpt_save_path == '':
         args.ckpt_save_path = args.save_path
+
 
     logger.info(f"Spawning processes on {args.gpus} GPUs.")
     logger.info(f"Verbosity: {args.verbose} (0: None, 1: Every epoch, 2: Every iteration)")
