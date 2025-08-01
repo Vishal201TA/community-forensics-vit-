@@ -298,12 +298,24 @@ def train_one_epoch(
             loss = criterion(outputs, labels)
         local_loss = local_window_loss.put(loss.item(), returnval=True) # update local window loss
         running_loss += loss.item()
-        scaler.scale(loss).backward() # AMP. scaler.scale(loss) will return loss if not enabled. If enabled, return scaled loss
-        scaler.unscale_(optimizer) # AMP
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # gradient clipping
-        scaler.step(optimizer) # AMP
-        scaler.update() # AMP
-        #optimizer.step()
+        # scaler.scale(loss).backward() # AMP. scaler.scale(loss) will return loss if not enabled. If enabled, return scaled loss
+        # scaler.unscale_(optimizer) # AMP
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # gradient clipping
+        # scaler.step(optimizer) # AMP
+        # scaler.update() # AMP
+
+        if scaler is not None and args.use_amp:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # optimizer.step()
+
+        optimizer.step()
         if itr > warmup_steps:
             scheduler.step()
         model_lat_pitr, model_thpt_pitr = trainBM.end(report=True)
