@@ -94,7 +94,6 @@ def parse_args():
 
     # CIFAKE arguments
     parser.add_argument('--dataset', type=str, default='cifake')
-    parser.add_argument('--resume', type=str, default=None, help='Path to resume checkpoint')
     parser.add_argument('--dataset_path', type=str, default='/path/to/CIFake/train')
     parser.add_argument('--val_path', type=str, default='/path/to/CIFake/test')
     parser.add_argument('--image_size', type=int, default=224)

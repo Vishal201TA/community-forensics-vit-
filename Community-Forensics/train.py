@@ -103,6 +103,13 @@ def train(
         epoch_start = 0
         total_itr = 0
 
+    # After loading checkpoint
+    epoch_start = checkpoint.get("epoch", 0)
+    if epoch_start >= args.epochs:
+        logger.info(f"Checkpoint epoch ({epoch_start}) >= total epochs ({args.epochs}). Training complete. Exiting.")
+        return  # Or sys.exit(0), or skip training
+
+
     # Optional: Compile model
     try:
         model = torch.compile(model, dynamic=True)
@@ -115,6 +122,9 @@ def train(
     local_window_loss = ut.LocalWindow(100)
     last_epoch = epoch_start - 1
     logger.info(f"Starting training loop...")
+    logger.info(f"epoch_start: {epoch_start}, args.epochs: {args.epochs}")
+    logger.info(f"range(epoch_start, args.epochs) = {list(range(epoch_start, args.epochs))}")
+
     for epoch in range(epoch_start, args.epochs):
         
         last_epoch = epoch
@@ -185,10 +195,6 @@ def train(
 def main():
     args = ut.parse_args()
     args.random_port_offset = np.random.randint(-1000, 1000)  # randomize to avoid port conflict in same device
-
-    # Use CLI values if given; else fallback to defaults
-    if not args.resume:
-        args.resume = "/kaggle/input/deepfake/pytorch/default/1/model_v11_ViT_384_base_ckpt.pt"
 
     if not args.save_path:
         args.save_path = "/kaggle/working/checkpoints/cifake-finetuned.pt"
