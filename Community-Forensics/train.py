@@ -170,21 +170,33 @@ def train(
                            args.save_path.replace('.pt', '_ckpt.pt'))
 
         if args.ckpt_keep_count > 0 and args.save_path.strip() != "":
+            os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
             ckpt_dir = os.path.dirname(args.save_path)
             ut.keep_only_topn_checkpoints(ckpt_dir, args.ckpt_keep_count)
 
 
-
 def main():
     args = ut.parse_args()
-    args.random_port_offset = np.random.randint(-1000,1000) # randomize to avoid port conflict in same device
+    args.random_port_offset = np.random.randint(-1000, 1000)  # randomize to avoid port conflict in same device
 
-    args.resume = "/kaggle/input/deepfake/pytorch/default/1/model_v11_ViT_384_base_ckpt.pt"
-    args.save_path = "cifake-finetuned.pt"
-    args.epochs = 5
-    args.verbose = 2
-    args.gpus_list = "0"
-    args.cpus_per_gpu = 2
+    # Use CLI values if given; else fallback to defaults
+    if not args.resume:
+        args.resume = "/kaggle/input/deepfake/pytorch/default/1/model_v11_ViT_384_base_ckpt.pt"
+
+    if not args.save_path:
+        args.save_path = "/kaggle/working/checkpoints/cifake-finetuned.pt"
+
+    if not args.epochs:
+        args.epochs = 5
+
+    if not args.verbose:
+        args.verbose = 2
+
+    if not args.gpus_list:
+        args.gpus_list = "0"
+
+    if not args.cpus_per_gpu:
+        args.cpus_per_gpu = 2
 
     if args.gpus_list != '':
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus_list

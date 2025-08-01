@@ -685,6 +685,7 @@ def keep_only_topn_checkpoints(save_path, n=5):
 
     # Delete all but top N
     for old_ckpt in ckpt_files[n:]:
+        os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
         os.remove(os.path.join(ckpt_dir, old_ckpt))
         logger.info(f"[INFO] Removed old checkpoint: {file_to_delete}")
 
