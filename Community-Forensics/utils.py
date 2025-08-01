@@ -632,11 +632,25 @@ def get_min_lr(args):
     else:
         return args.lr * 0.001
 
+# def unpack_data_and_preprocess(data, device, dtype=torch.float32):
+#     inputs, labels, generator_names = data
+#     inputs = inputs.to(device)
+#     labels = labels.unsqueeze(dim=1).to(device, dtype=dtype)
+#     return inputs, labels, generator_names
+
 def unpack_data_and_preprocess(data, device, dtype=torch.float32):
-    inputs, labels, generator_names = data
+    if len(data) == 3:
+        inputs, labels, generator_names = data
+    elif len(data) == 2:
+        inputs, labels = data
+        generator_names = None
+    else:
+        raise ValueError(f"[ERROR] Unexpected number of items in batch: {len(data)}")
+
     inputs = inputs.to(device)
     labels = labels.unsqueeze(dim=1).to(device, dtype=dtype)
     return inputs, labels, generator_names
+
 
 def determine_ckpt_path(args, epoch):
     """
