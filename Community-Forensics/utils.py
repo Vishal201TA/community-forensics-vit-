@@ -269,7 +269,9 @@ def train_one_epoch(
 ):
     model.train()
     running_loss=0.
-    train_loader.sampler.set_epoch(epoch) # Set trainloader epoch
+    if hasattr(train_loader.sampler, "set_epoch"):
+        train_loader.sampler.set_epoch(epoch)
+    # train_loader.sampler.set_epoch(epoch) # Set trainloader epoch
     device = model.device
     trainBM = Benchmarker(args, rank, benchmark_name="TrainModel", images_per_itr=args.batch_size)
     trainDLBM = Benchmarker(args, rank, benchmark_name="TrainDataLoad")
