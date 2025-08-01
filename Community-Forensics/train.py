@@ -15,19 +15,22 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 logger: logging.Logger = ut.logger
 
-def keep_only_topn_checkpoints(ckpt_path, keep_top_n):
-    ckpt_dir = os.path.dirname(ckpt_path)
+def keep_only_topn_checkpoints(save_path, n=3):
+    ckpt_dir = os.path.dirname(save_path)
 
-    if not ckpt_dir or not os.path.exists(ckpt_dir):
-        logger.warning(f"[WARNING] Checkpoint directory does not exist: {ckpt_dir}")
-        return  # Exit safely
+    if not ckpt_dir or not os.path.isdir(ckpt_dir):
+        print(f"[Warning] Checkpoint directory not found or invalid: '{ckpt_dir}'")
+        return
 
-    ckpt_files = [f for f in os.listdir(ckpt_dir) if f.startswith("checkpoint_") and f.endswith(".pt")]
-    ckpt_files = sorted(ckpt_files, key=lambda x: os.path.getmtime(os.path.join(ckpt_dir, x)))
+    # Collect all .pt files in the directory
+    ckpt_files = [f for f in os.listdir(ckpt_dir) if f.endswith(".pt")]
 
-    while len(ckpt_files) > keep_top_n:
-        file_to_delete = ckpt_files.pop(0)
-        os.remove(os.path.join(ckpt_dir, file_to_delete))
+    # Sort by last modified time (most recent first)
+    ckpt_files = sorted(ckpt_files, key=lambda f: os.path.getmtime(os.path.join(ckpt_dir, f)), reverse=True)
+
+    # Delete all but top N
+    for old_ckpt in ckpt_files[n:]:
+        os.remove(os.path.join(ckpt_dir, old_ckpt))
         logger.info(f"[INFO] Removed old checkpoint: {file_to_delete}")
 
 
