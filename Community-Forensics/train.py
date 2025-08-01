@@ -57,7 +57,10 @@ def train(
         ut.init_wandb(args)
 
     # Load data
+    
     trainLoader, valLoader = ut.get_dataloader(args, mode='train')
+    logger.info(f"Train dataset size: {len(trainLoader)}")
+
     args = ut.get_epochs_for_itrs(args, len(trainLoader))
     trainLoaderLen = len(trainLoader)
 
@@ -111,10 +114,12 @@ def train(
     # Training loop
     local_window_loss = ut.LocalWindow(100)
     last_epoch = epoch_start - 1
+    logger.info(f"Starting training loop...")
     for epoch in range(epoch_start, args.epochs):
+        
         last_epoch = epoch
         gc.collect()
-
+        logger.info(f"Starting epoch {epoch+1}")
         avgTrainLoss, total_itr = ut.train_one_epoch(
             args=args,
             epoch=epoch,
@@ -129,6 +134,7 @@ def train(
             rank=rank,
             itr=total_itr,
         )
+        logger.info(f"Epoch {epoch+1} completed. Average Training Loss: {avgTrainLoss}")
 
         if valLoader is not None:
             valLoss, valAcc, valAP = ut.evaluate_one_epoch(
