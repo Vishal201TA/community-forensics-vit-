@@ -165,6 +165,7 @@ def train(
 
     # Save final model and checkpoint
     if rank == 0:
+        os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
         torch.save(model.state_dict(), args.save_path)
         ut.save_checkpoint(model, optimizer, scheduler, scaler, last_epoch, total_itr,
                            args.save_path.replace('.pt', '_ckpt.pt'))
