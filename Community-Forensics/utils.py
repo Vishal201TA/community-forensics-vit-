@@ -669,20 +669,26 @@ def save_checkpoint(model, optimizer, scheduler, scaler, epoch, itr, ckpt_path):
     }
     torch.save(checkpoint, ckpt_path)
 
-def keep_only_topn_checkpoints(ckpt_path, top_n=5):
-    """
-    Automatically keeps only top_n checkpoints in ckpt_path
-    """
-    ckpt_dir = os.path.dirname(ckpt_path)
-    ckpt_files = [f for f in os.listdir(ckpt_dir) if f.startswith("checkpoint_") and f.endswith(".pt")]
-    ckpt_files = sorted(ckpt_files, key=lambda x: int(x.split("_")[1].split(".")[0]), reverse=True) # sort by epoch, descending
-    # remove all but most recent top_n checkpoints
-    if len(ckpt_files) > top_n:
-        for f in ckpt_files[top_n:]:
-            os.remove(os.path.join(ckpt_dir, f))
+
+def keep_only_topn_checkpoints(save_path, n=5):
+    ckpt_dir = os.path.dirname(save_path)
+
+    if not ckpt_dir or not os.path.isdir(ckpt_dir):
+        print(f"[Warning] Checkpoint directory not found or invalid: '{ckpt_dir}'")
+        return
+
+    # Collect all .pt files in the directory
+    ckpt_files = [f for f in os.listdir(ckpt_dir) if f.endswith(".pt")]
+
+    # Sort by last modified time (most recent first)
+    ckpt_files = sorted(ckpt_files, key=lambda f: os.path.getmtime(os.path.join(ckpt_dir, f)), reverse=True)
+
+    # Delete all but top N
+    for old_ckpt in ckpt_files[n:]:
+        os.remove(os.path.join(ckpt_dir, old_ckpt))
+        logger.info(f"[INFO] Removed old checkpoint: {file_to_delete}")
 
     return
-
 def load_checkpoint(model, optimizer, scheduler, scaler, ckpt_path, rank):
     """
     Loads checkpoint from ckpt_path

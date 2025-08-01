@@ -15,7 +15,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 logger: logging.Logger = ut.logger
 
-def keep_only_topn_checkpoints(save_path, n=3):
+def keep_only_topn_checkpoints(save_path, n=5):
     ckpt_dir = os.path.dirname(save_path)
 
     if not ckpt_dir or not os.path.isdir(ckpt_dir):
@@ -32,6 +32,8 @@ def keep_only_topn_checkpoints(save_path, n=3):
     for old_ckpt in ckpt_files[n:]:
         os.remove(os.path.join(ckpt_dir, old_ckpt))
         logger.info(f"[INFO] Removed old checkpoint: {file_to_delete}")
+
+    return 
 
 
 def train(
